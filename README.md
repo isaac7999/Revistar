@@ -5,7 +5,7 @@ local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
 local TextChatService = game:GetService("TextChatService")
 
--- Proteção contra Kick manual e console logs
+-- Bloquear kicks
 local mt = getrawmetatable(game)
 setreadonly(mt, false)
 local oldNamecall = mt.__namecall
@@ -13,47 +13,39 @@ local oldNamecall = mt.__namecall
 mt.__namecall = newcclosure(function(self, ...)
     local method = getnamecallmethod()
     if method == "Kick" or method == "kick" then
-        warn("[Proteção]: Tentaram te kickar! Bloqueado.")
+        warn("[Proteção]: Kick bloqueado.")
         return nil
     end
     return oldNamecall(self, ...)
 end)
 
--- Proteção contra kick direto
 LocalPlayer.Kick = function()
-    return warn("[Proteção]: Kick bloqueado!")
+    return warn("[Proteção]: Kick manual bloqueado.")
 end
 
--- Proteção contra logs suspeitos no console
-local oldPrint = print
-local oldWarn = warn
-local blockedWords = { "Exploit", "Executor", "Ban", "Detected", "Script", "Hack" }
+-- Proteção de console
+local blockedWords = { "Exploit", "Ban", "Detected", "Script", "Kick", "Executor" }
+local oldPrint, oldWarn = print, warn
 
 print = function(...)
-    local args = {...}
-    for _, v in ipairs(args) do
+    for _, v in ipairs({...}) do
         for _, word in ipairs(blockedWords) do
-            if type(v) == "string" and v:lower():find(word:lower()) then
-                return
-            end
+            if type(v) == "string" and v:lower():find(word:lower()) then return end
         end
     end
-    oldPrint(unpack(args))
+    oldPrint(...)
 end
 
 warn = function(...)
-    local args = {...}
-    for _, v in ipairs(args) do
+    for _, v in ipairs({...}) do
         for _, word in ipairs(blockedWords) do
-            if type(v) == "string" and v:lower():find(word:lower()) then
-                return
-            end
+            if type(v) == "string" and v:lower():find(word:lower()) then return end
         end
     end
-    oldWarn(unpack(args))
+    oldWarn(...)
 end
 
--- Enviar comando /revistar morto
+-- Enviar o /revistar morto 3x
 local function sendRevistarMessage()
     local success, err = pcall(function()
         local channel = TextChatService:WaitForChild("TextChannels"):WaitForChild("RBXGeneral")
@@ -67,16 +59,21 @@ local function sendRevistarMessage()
     end
 end
 
--- Monitorar players próximos com 0 de vida
+-- Verificar players mortos próximos (até 100 studs) e acionar se estiver a 60 ou menos
 RunService.Heartbeat:Connect(function()
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") then
-            local humanoid = player.Character:FindFirstChild("Humanoid")
-            local distance = (player.Character.PrimaryPart.Position - LocalPlayer.Character.PrimaryPart.Position).Magnitude
-            if distance <= 200 and humanoid.Health <= 0 then
-                sendRevistarMessage()
-                task.wait(1.5) -- Espera para evitar spam
+    pcall(function()
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") and player.Character:FindFirstChild("HumanoidRootPart") then
+                local humanoid = player.Character.Humanoid
+                local distance = (player.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+
+                if humanoid.Health <= 0 and distance <= 100 then
+                    if distance <= 60 then
+                        sendRevistarMessage()
+                        task.wait(2) -- Aguarda para não enviar repetido
+                    end
+                end
             end
         end
-    end
+    end)
 end)
